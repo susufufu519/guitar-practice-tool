@@ -1,0 +1,232 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 電吉他指板（6弦，12格）
+string_notes = [
+    ['E', 'F', '#F', 'G', '#G', 'A', '#A', 'B', 'C', '#C', 'D', '#D', 'E'],  # 1弦
+    ['B', 'C', '#C', 'D', '#D', 'E', 'F', '#F', 'G', '#G', 'A', '#A', 'B'],  # 2弦
+    ['G', '#G', 'A', '#A', 'B', 'C', '#C', 'D', '#D', 'E', 'F', '#F', 'G'],  # 3弦
+    ['D', '#D', 'E', 'F', '#F', 'G', '#G', 'A', '#A', 'B', 'C', '#C', 'D'],  # 4弦
+    ['A', '#A', 'B', 'C', '#C', 'D', '#D', 'E', 'F', '#F', 'G', '#G', 'A'],  # 5弦
+    ['E', 'F', '#F', 'G', '#G', 'A', '#A', 'B', 'C', '#C', 'D', '#D', 'E']   # 6弦
+ ]
+
+# 標準吉他調音
+STANDARD_TUNING = ['E', 'A', 'D', 'G', 'B', 'E']
+
+# 十二平均律音符順序
+note_cycle = ['C', '#C', 'D', '#D', 'E', 'F', '#F', 'G', '#G', 'A', '#A', 'B']
+
+# 音程對應的半音數
+interval_semitones = {
+    "1P": 0,  # 純一度（Unison）
+    "2m": 1,  # 小二度（Minor Second）
+    "2M": 2,  # 大二度（Major Second）
+    "3m": 3,  # 小三度（Minor Third）
+    "3M": 4,  # 大三度（Major Third）
+    "4P": 5,  # 純四度（Perfect Fourth）
+    "5P": 7,  # 純五度（Perfect Fifth）
+    "6m": 8,  # 小六度（Minor Sixth）
+    "6M": 9,  # 大六度（Major Sixth）
+    "7m": 10, # 小七度（Minor Seventh）
+    "7M": 11, # 大七度（Major Seventh）
+    "8P": 12  # 純八度（Octave）
+}
+semitones_to_intervals = {v: k for k, v in interval_semitones.items()}
+
+#調內音
+scale_patterns = {
+    "major": [0, 2, 4, 5, 7, 9, 11],  # 大調
+    "minor": [0, 2, 3, 5, 7, 8, 10],  # 小調
+    "major_pentatonic": [0, 2, 4, 7, 9],  # 大調五聲音階
+    "minor_pentatonic": [0, 3, 5, 7, 10],  # 小調五聲音階
+    "blues": [0, 3, 5, 6, 7, 10],  # 藍調音階
+}
+
+####################################################################
+
+# 預生成吉他指板音符的資料結構
+def generate_fretboard():
+    string_notes = []
+    for open_note in STANDARD_TUNING:
+        open_note_index = note_cycle.index(open_note)
+        string_notes.append([note_cycle[(open_note_index + fret) % 12] for fret in range(13)])
+    return string_notes
+
+STRING_NOTES = generate_fretboard()
+
+#從音符找到位置
+def get_positions_from_note(note):
+  
+    if note not in note_cycle:
+        return "音符未找到"
+    positions = []
+    for string_idx, string in enumerate(STRING_NOTES, start=1):
+        for fret_idx, fret_note in enumerate(string):
+            if fret_note == note:
+                positions.append((string_idx, fret_idx))
+    return positions
+
+#從位置找到音符
+def get_note_from_position(string, fret):
+    if string < 1 or string > 6 or fret < 0 or fret > 12:
+        return "弦號或格數超出範圍"
+    return STRING_NOTES[string - 1][fret]
+
+#給起始音和音程，回報音名
+def get_note_by_interval(start_note, interval):
+    if start_note not in note_cycle:
+        return "起始音符無效，請使用十二平均律的音符"
+    if interval not in interval_semitones:
+        return "音程無效，請使用正確的音程（如 '3M', '5P'）"
+    start_index = note_cycle.index(start_note)
+    semitone_steps = interval_semitones[interval]
+    target_index = (start_index + semitone_steps) % 12
+    return note_cycle[target_index]
+
+#給起始音跟調名，回報級數跟調內音
+def generate_scale(start_note, scale_type):
+    if start_note not in note_cycle:
+        return "起始音符無效，請使用十二平均律的音符"
+    if scale_type not in scale_patterns:
+        return "音階類型無效，請選擇以下之一: major, minor, major_pentatonic, minor_pentatonic, blues"
+    start_index = note_cycle.index(start_note)
+    intervals = scale_patterns[scale_type]
+    interval_names = [semitones_to_intervals[interval] for interval in intervals]
+    absolute_notes = [(note_cycle[(start_index + interval) % 12]) for interval in intervals]
+    return interval_names, absolute_notes
+
+#找根音
+def select_root(all_positions):
+    # 確認第一個音符的所有位置
+    first_note_positions = all_positions[0]
+    # 按弦號優先排序，選擇弦號最小的
+    return max(first_note_positions, key=lambda x: x[0])
+
+#找根音
+def find_root(start_note, scale_type):
+    """
+    根據起始音和調式，找到根音的位置
+    """
+    _, absolute_notes = generate_scale(start_note, scale_type)
+    root_note = absolute_notes[0]  # 根音是音階的第一個音符
+    root_positions = get_positions_from_note(root_note)
+    if not root_positions:
+        raise ValueError(f"未找到音符 {root_note} 的位置")
+    # 按弦號優先選擇位置
+    return max(root_positions, key=lambda pos: pos[0])
+
+#畫圖
+def plot_guitar_fretboard(
+    fretboard, 
+    notes_to_highlight, 
+    root_positions=None,  # 多個根音位置
+    fretboard_width=120, 
+    fretboard_height=4.9, 
+    num_frets=12
+):
+    string_positions = [0, 0.7, 1.4, 2.1, 2.8, 3.5]  # 每根弦的位置
+    frets = np.linspace(0, fretboard_width, num_frets + 1)  # 計算每條格線的位置
+
+    fig, ax = plt.subplots(figsize=(fretboard_height, fretboard_width))
+    
+    # 畫品格線
+    for fret in frets:
+        ax.vlines(fret, 0, fretboard_height, colors='black', linewidth=1)
+    
+    # 畫弦線
+    for string in string_positions:
+        ax.hlines(string * 1.4, 0, fretboard_width, colors='black', linewidth=1)
+    
+    # 繪製音符標記
+    for string_idx, string in enumerate(fretboard):
+        for fret_idx, note in enumerate(string):
+            if note in notes_to_highlight:
+                # 水平位置: 第n格與第n+1格中間
+                if fret_idx < len(frets) - 1:  # 確保不超出邊界
+                    target_fret_position = (frets[fret_idx] + frets[fret_idx + 1]) / 2
+                else:
+                    continue  # 超出範圍時跳過
+                # 垂直位置: 對應弦的位置
+                target_string_position = string_positions[5 - string_idx]
+                
+                # 判斷是否為根音
+                if root_positions and (string_idx + 1, fret_idx) in root_positions:
+                    # 根音樣式 (藍底白字黑框)
+                    ax.scatter(
+                        target_fret_position, 
+                        target_string_position * 1.4, 
+                        color='blue',  # 填充藍色
+                        edgecolor='black',  # 黑色邊框
+                        s=300, 
+                        zorder=5
+                    )
+                    ax.text(
+                        target_fret_position, 
+                        target_string_position * 1.4, 
+                        note, 
+                        fontsize=8, 
+                        color='white',  # 文字為白色
+                        ha='center', 
+                        va='center', 
+                        zorder=6
+                    )
+                else:
+                    # 其他音符樣式 (白底紅字黑框)
+                    ax.scatter(
+                        target_fret_position, 
+                        target_string_position * 1.4, 
+                        color='white',  # 填充白色
+                        edgecolor='black',  # 黑色邊框
+                        s=200, 
+                        zorder=5
+                    )
+                    ax.text(
+                        target_fret_position, 
+                        target_string_position * 1.4, 
+                        note, 
+                        fontsize=8, 
+                        color='red',  # 文字為紅色
+                        ha='center', 
+                        va='center', 
+                        zorder=6
+                    )
+    
+    # 加入格數標示
+    for i in range(1, num_frets + 1):
+        mid_position = (frets[i] + frets[i - 1]) / 2
+        ax.text(mid_position, fretboard_height + 0.1, str(i),
+                horizontalalignment='center', verticalalignment='bottom', fontsize=12, color='black')
+    
+    # 設定邊界和隱藏軸線
+    ax.set_xlim(-1, fretboard_width + 1)
+    ax.set_ylim(-1, fretboard_height + 1)
+    ax.axis('off')
+    plt.show()
+
+def main():
+    print("歡迎使用吉他指板音階標記工具！")
+    print("可使用的音階類型如下:")
+    for scale in scale_patterns.keys():
+        print(f"- {scale}")
+
+    while True:
+        start_note = input("請輸入調性（如C, D, E等，輸入exit結束程式）: ").strip()
+        if start_note.lower() == 'exit':
+            print("感謝使用，再見！")
+            break
+
+        scale_type = input("請輸入音階類型（如major, minor, major_pentatonic等）: ").strip()
+
+        try:
+            interval_names, absolute_notes = generate_scale(start_note, scale_type)
+            root_positions = get_positions_from_note(start_note)
+            print(f"音階生成成功: {absolute_notes}")
+            print(f"根音位置: {root_positions}")
+            plot_guitar_fretboard(generate_fretboard(), absolute_notes, root_positions=root_positions)
+        except ValueError as e:
+            print(f"錯誤: {e}")
+
+
+if __name__=="__main__":
+   main()
